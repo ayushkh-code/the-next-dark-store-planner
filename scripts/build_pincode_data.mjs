@@ -173,32 +173,49 @@ function convexHull(points) {
   return lower.concat(upper);
 }
 
+function ringArea(ring) {
+  let area = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    area += ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
+  }
+  return area / 2;
+}
+
+/** Clockwise closed ring — d3-geo treats CCW rings as the rest of the globe. */
+function clockwiseClosedRing(ring) {
+  const closed =
+    ring.length > 1 &&
+    ring[0][0] === ring[ring.length - 1][0] &&
+    ring[0][1] === ring[ring.length - 1][1];
+  const open = closed ? ring.slice(0, -1) : ring.slice();
+  if (ringArea([...open, open[0]]) > 0) open.reverse();
+  return [...open, open[0]];
+}
+
 function ringFor(points) {
   if (points.length === 0) return null;
   if (points.length < 3) {
     const [lng, lat] = points[0];
     const d = 0.035;
-    return [
+    return clockwiseClosedRing([
       [lng - d, lat - d],
       [lng + d, lat - d],
       [lng + d, lat + d],
       [lng - d, lat + d],
-      [lng - d, lat - d],
-    ];
+    ]);
   }
   const hull = convexHull(points);
   if (hull.length < 3) {
     const [lng, lat] = points[0];
     const d = 0.035;
-    return [
+    return clockwiseClosedRing([
       [lng - d, lat - d],
       [lng + d, lat - d],
       [lng + d, lat + d],
       [lng - d, lat + d],
-      [lng - d, lat - d],
-    ];
+    ]);
   }
-  return [...hull, hull[0]];
+  return clockwiseClosedRing(hull);
 }
 
 function parseGist() {

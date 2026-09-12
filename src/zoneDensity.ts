@@ -8,6 +8,7 @@ import type { PinZone } from './data';
 import {
   MAP_HEIGHT,
   MAP_WIDTH,
+  rewindFeatureForD3,
   zoneSvgPath,
   zoneLabelPoint,
   zonesCollection,
@@ -37,7 +38,8 @@ export interface ZoneDensity {
 
 /** Land area of a GeoJSON feature in square kilometres. */
 function featureAreaSqKm(feature: Feature<Geometry>): number {
-  const sqM = geoArea(feature) * EARTH_RADIUS_M * EARTH_RADIUS_M;
+  const sqM =
+    geoArea(rewindFeatureForD3(feature)) * EARTH_RADIUS_M * EARTH_RADIUS_M;
   return sqM * SQ_KM_PER_SQ_M;
 }
 

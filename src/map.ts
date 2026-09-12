@@ -2,7 +2,13 @@
  * Bengaluru map projection and styling helpers for coverage visualization.
  */
 import { geoMercator, geoPath } from 'd3-geo';
-import type { Feature, FeatureCollection, Geometry } from 'geojson';
+import type {
+  Feature,
+  FeatureCollection,
+  Geometry,
+  MultiPoint,
+  Position,
+} from 'geojson';
 import zonesGeo from './blr-zones.json';
 
 /** Amber sequential ramp: 1-hour (closest) = most saturated. */
@@ -27,37 +33,107 @@ export interface ZoneMapLabel {
   y: number;
 }
 
-const projection = geoMercator().fitSize(
-  [MAP_WIDTH, MAP_HEIGHT],
-  zonesCollection,
+/** Signed planar area; positive means counter-clockwise. */
+function ringArea(ring: Position[]): number {
+  let area = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [x0, y0] = ring[j];
+    const [x1, y1] = ring[i];
+    area += x0 * y1 - x1 * y0;
+  }
+  return area / 2;
+}
+
+/**
+ * d3-geo treats a counter-clockwise ring as the complement of the globe
+ * (~4π steradians). Clockwise exteriors keep Bengaluru hulls as small polygons.
+ */
+function ensureClockwiseRing(ring: Position[]): Position[] {
+  const closed =
+    ring.length > 1 &&
+    ring[0][0] === ring[ring.length - 1][0] &&
+    ring[0][1] === ring[ring.length - 1][1];
+  const open = closed ? ring.slice(0, -1) : ring.slice();
+  const ordered = ringArea(open.concat([open[0]])) > 0 ? open.reverse() : open;
+  return [...ordered, ordered[0]];
+}
+
+/** Rewind polygons so d3-geo area, bounds, and path fills stay local. */
+export function rewindFeatureForD3(
+  feature: Feature<Geometry>,
+): Feature<Geometry> {
+  const g = feature.geometry;
+  if (!g || g.type !== 'Polygon') return feature;
+  return {
+    ...feature,
+    geometry: {
+      type: 'Polygon',
+      coordinates: g.coordinates.map((ring) => ensureClockwiseRing(ring)),
+    },
+  };
+}
+
+const rewoundZones: FeatureCollection<Geometry> = {
+  type: 'FeatureCollection',
+  features: zonesCollection.features.map((f) =>
+    rewindFeatureForD3(f as Feature<Geometry>),
+  ),
+};
+
+const fitPoints: MultiPoint = {
+  type: 'MultiPoint',
+  coordinates: rewoundZones.features.flatMap((f) => {
+    const g = f.geometry;
+    if (g?.type === 'Polygon') return g.coordinates[0] ?? [];
+    return [];
+  }),
+};
+
+const projection = geoMercator().fitExtent(
+  [
+    [36, 24],
+    [MAP_WIDTH - 36, MAP_HEIGHT - 24],
+  ],
+  fitPoints,
 );
 
 const pathGenerator = geoPath(projection);
 
 /** SVG path for a zone feature in the shared Mercator projection. */
 export function zoneSvgPath(feature: Feature<Geometry>): string | null {
-  return pathGenerator(feature) ?? null;
+  return pathGenerator(rewindFeatureForD3(feature)) ?? null;
 }
 
 /** Projected centroid for zone labels. */
 export function zoneLabelPoint(
   feature: Feature<Geometry>,
 ): [number, number] | null {
-  const c = pathGenerator.centroid(feature);
+  const lat =
+    typeof feature.properties?.lat === 'number'
+      ? feature.properties.lat
+      : null;
+  const lng =
+    typeof feature.properties?.lng === 'number'
+      ? feature.properties.lng
+      : null;
+  if (lat != null && lng != null) {
+    return projectPoint(lat, lng);
+  }
+  const c = pathGenerator.centroid(rewindFeatureForD3(feature));
   if (!c || Number.isNaN(c[0]) || Number.isNaN(c[1])) return null;
   return c;
 }
 
 /** SVG path data for Bengaluru zone outlines. */
 export const zonePaths: { id: string; d: string | null }[] =
-  zonesCollection.features.map((f) => ({
+  rewoundZones.features.map((f) => ({
     id: String(f.properties?.name ?? f.id ?? ''),
     d: pathGenerator(f) ?? null,
   }));
 
 /** Projected label positions for metro zones / taluks. */
 export function getZoneMapLabels(): ZoneMapLabel[] {
-  return zonesCollection.features
+  return rewoundZones.features
     .map((f) => {
       const name =
         typeof f.properties?.name === 'string' ? f.properties.name : '';

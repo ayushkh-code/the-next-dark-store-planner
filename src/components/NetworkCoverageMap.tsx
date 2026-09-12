@@ -225,9 +225,9 @@ export function NetworkCoverageMap({
                 dominantBaseline="middle"
                 className="density-map__label network-map__state-label"
                 fill="#374151"
-                fontSize={st.abbr.length > 3 ? 8 : 10}
+                fontSize={st.name.length > 8 ? 8 : 10}
               >
-                {st.abbr}
+                {st.name}
               </text>
             ))}
           </g>

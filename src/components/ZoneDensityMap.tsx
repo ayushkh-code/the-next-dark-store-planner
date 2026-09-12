@@ -149,7 +149,7 @@ export function ZoneDensityMap({ zones }: ZoneDensityMapProps) {
 
             <g className="density-map__labels" aria-hidden="true">
               {densityZones.map((st) =>
-                st.abbr && st.labelX !== null && st.labelY !== null ? (
+                st.name && st.labelX !== null && st.labelY !== null ? (
                   <text
                     key={`label-${st.name}`}
                     x={st.labelX}
@@ -158,9 +158,9 @@ export function ZoneDensityMap({ zones }: ZoneDensityMapProps) {
                     dominantBaseline="middle"
                     className="density-map__label"
                     fill={densityLabelColor(st.tier)}
-                    fontSize={st.abbr.length > 3 ? 8 : 10}
+                    fontSize={st.name.length > 8 ? 8 : 10}
                   >
-                    {st.abbr}
+                    {st.name}
                   </text>
                 ) : null,
               )}

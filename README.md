@@ -39,7 +39,7 @@ The generator is `scripts/build_pincode_data.mjs`. It:
 
 Service hours are computed client-side: haversine km × 1.35 road circuity; ≤8 km → 1h, ≤16 km → 2h, ≤28 km → 3h.
 
-Density-map polygons are convex hulls of pincode points in each zone / taluk, not official BBMP boundary files.
+Coverage and density maps draw simplified BBMP 2011 ward polygons, peri-urban taluk outlines, and named lakes (OpenStreetMap). `npm run map` rebuilds `src/blr-basemap.json` from `scripts/raw/`.
 
 ## Local development
 

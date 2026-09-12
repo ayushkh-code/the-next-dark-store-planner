@@ -3,12 +3,12 @@ import type { PinZone } from '../data';
 import { formatNumber } from '../format';
 import { TAB_PURPOSE } from '../tabPurpose';
 import { TabPurpose } from './TabPurpose';
+import { getZoneMapLabels, lakePaths } from '../map';
 import {
   MAP_HEIGHT,
   MAP_WIDTH,
   computeZoneDensities,
   densityFillColor,
-  densityLabelColor,
   densityTierRanges,
   DENSITY_TIER_COLORS,
   DENSITY_TIER_LABELS,
@@ -70,6 +70,7 @@ export function ZoneDensityMap({ zones }: ZoneDensityMapProps) {
   const [viewBox, setViewBox] = useState<MapViewBox>(FULL_VIEW);
 
   const densityZones = useMemo(() => computeZoneDensities(zones), [zones]);
+  const zoneLabels = useMemo(() => getZoneMapLabels(), []);
   const tierRanges = useMemo(() => densityTierRanges(densityZones), [densityZones]);
   const zoomed = !isFullView(viewBox);
 
@@ -102,7 +103,7 @@ export function ZoneDensityMap({ zones }: ZoneDensityMapProps) {
 
       <div className="coverage-map density-map">
         <div className="coverage-map__header density-map__header">
-          <h3>Population density by zone</h3>
+          <h3>Population density by ward</h3>
         </div>
 
         <div className="coverage-map__frame density-map__frame">
@@ -120,7 +121,7 @@ export function ZoneDensityMap({ zones }: ZoneDensityMapProps) {
             viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`}
             className="coverage-map__svg density-map__svg"
             role="img"
-            aria-label="Bengaluru zone map colored by population density"
+            aria-label="Bengaluru ward map colored by population density"
             onClick={handleMapClick}
           >
             <rect
@@ -134,11 +135,11 @@ export function ZoneDensityMap({ zones }: ZoneDensityMapProps) {
               {densityZones.map((st) =>
                 st.path ? (
                   <path
-                    key={st.name}
+                    key={st.id}
                     d={st.path}
                     fill={densityFillColor(st.tier)}
                     stroke="#fff"
-                    strokeWidth={0.75}
+                    strokeWidth={0.45}
                     className="density-map__state"
                     onMouseEnter={() => setHovered(st)}
                     onMouseLeave={() => setHovered(null)}
@@ -147,23 +148,35 @@ export function ZoneDensityMap({ zones }: ZoneDensityMapProps) {
               )}
             </g>
 
-            <g className="density-map__labels" aria-hidden="true">
-              {densityZones.map((st) =>
-                st.name && st.labelX !== null && st.labelY !== null ? (
-                  <text
-                    key={`label-${st.name}`}
-                    x={st.labelX}
-                    y={st.labelY}
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    className="density-map__label"
-                    fill={densityLabelColor(st.tier)}
-                    fontSize={st.name.length > 8 ? 8 : 10}
-                  >
-                    {st.name}
-                  </text>
+            <g className="coverage-map__lakes">
+              {lakePaths.map((s) =>
+                s.d ? (
+                  <path
+                    key={`lake-${s.id}`}
+                    d={s.d}
+                    fill="#C5D4DE"
+                    stroke="#B3C5D1"
+                    strokeWidth={0.4}
+                  />
                 ) : null,
               )}
+            </g>
+
+            <g className="density-map__labels" aria-hidden="true">
+              {zoneLabels.map((st) => (
+                <text
+                  key={`label-${st.name}`}
+                  x={st.x}
+                  y={st.y}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  className="density-map__label"
+                  fill="#1e293b"
+                  fontSize={st.name.length > 8 ? 8 : 10}
+                >
+                  {st.name}
+                </text>
+              ))}
             </g>
           </svg>
 

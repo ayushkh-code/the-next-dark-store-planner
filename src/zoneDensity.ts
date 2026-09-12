@@ -1,6 +1,6 @@
 /**
- * Zone-level population density tiers for the choropleth map.
- * Population is summed from pincodes; land area from zone hull geometries.
+ * Ward-level population density tiers for the choropleth map.
+ * BBMP wards use 2011 census density; peri-urban taluks use PIN totals / land area.
  */
 import { geoArea } from 'd3-geo';
 import type { Feature, Geometry } from 'geojson';
@@ -9,13 +9,15 @@ import {
   MAP_HEIGHT,
   MAP_WIDTH,
   rewindFeatureForD3,
-  zoneSvgPath,
+  taluksCollection,
+  wardsCollection,
   zoneLabelPoint,
-  zonesCollection,
+  zoneSvgPath,
 } from './map';
 
 const EARTH_RADIUS_M = 6378137;
 const SQ_KM_PER_SQ_M = 1 / 1_000_000;
+const WARD_POP_GROWTH = 1.56;
 
 /** Three-tier density palette (low → high). */
 export const DENSITY_TIER_COLORS = ['#dbeafe', '#3b82f6', '#1e3a8a'] as const;
@@ -25,6 +27,7 @@ const NO_DATA_COLOR = '#e8ecf1';
 export type DensityTier = 0 | 1 | 2;
 
 export interface ZoneDensity {
+  id: string;
   name: string;
   abbr: string;
   population: number;
@@ -67,21 +70,21 @@ function assignTiers(
   const n = withDensity.length;
   if (n === 0) return states.map((s) => ({ ...s, tier: null }));
 
-  const tierByName = new Map<string, DensityTier>();
+  const tierById = new Map<string, DensityTier>();
   const t1 = Math.floor(n / 3);
   const t2 = Math.floor((2 * n) / 3);
   withDensity.forEach((s, i) => {
     let tier: DensityTier = 2;
     if (i < t1) tier = 0;
     else if (i < t2) tier = 1;
-    tierByName.set(s.name, tier);
+    tierById.set(s.id, tier);
   });
 
   return states.map((s) => ({
     ...s,
     tier:
       s.population > 0 && s.areaSqKm > 0
-        ? (tierByName.get(s.name) ?? null)
+        ? (tierById.get(s.id) ?? null)
         : null,
   }));
 }
@@ -105,33 +108,76 @@ export function densityTierRanges(
   });
 }
 
-/** Build zone density records with SVG paths for choropleth rendering. */
+function featureToDensity(
+  feature: Feature<Geometry>,
+  id: string,
+  population: number,
+  areaSqKm: number,
+  density: number,
+): Omit<ZoneDensity, 'tier'> {
+  const name =
+    typeof feature.properties?.name === 'string' ? feature.properties.name : '';
+  const abbr =
+    typeof feature.properties?.abbr === 'string' ? feature.properties.abbr : name;
+  const centroid = zoneLabelPoint(feature);
+  return {
+    id,
+    name,
+    abbr,
+    population,
+    areaSqKm,
+    density,
+    path: zoneSvgPath(feature),
+    labelX: centroid ? centroid[0] : null,
+    labelY: centroid ? centroid[1] : null,
+  };
+}
+
+/** Build ward (and peri-urban taluk) density records with SVG paths. */
 export function computeZoneDensities(zones: PinZone[]): ZoneDensity[] {
   const popByZone = aggregatePopulationByZone(zones);
 
-  const base = zonesCollection.features.map((f) => {
-    const name =
-      typeof f.properties?.name === 'string' ? f.properties.name : '';
-    const abbr =
-      typeof f.properties?.abbr === 'string' ? f.properties.abbr : name;
-    const population = popByZone.get(name) ?? 0;
-    const areaSqKm = featureAreaSqKm(f as Feature<Geometry>);
-    const density = areaSqKm > 0 ? population / areaSqKm : 0;
-    const centroid = zoneLabelPoint(f as Feature<Geometry>);
-
-    return {
-      name,
-      abbr,
+  const wards = wardsCollection.features.map((f) => {
+    const population = Math.round(
+      (typeof f.properties?.population === 'number'
+        ? f.properties.population
+        : 0) * WARD_POP_GROWTH,
+    );
+    const areaSqKm =
+      typeof f.properties?.areaSqKm === 'number' && f.properties.areaSqKm > 0
+        ? f.properties.areaSqKm
+        : featureAreaSqKm(f as Feature<Geometry>);
+    const density =
+      typeof f.properties?.density === 'number' && f.properties.density > 0
+        ? f.properties.density
+        : areaSqKm > 0
+          ? population / areaSqKm
+          : 0;
+    return featureToDensity(
+      f as Feature<Geometry>,
+      `ward-${f.id ?? f.properties?.name ?? ''}`,
       population,
       areaSqKm,
       density,
-      path: zoneSvgPath(f as Feature<Geometry>),
-      labelX: centroid ? centroid[0] : null,
-      labelY: centroid ? centroid[1] : null,
-    };
+    );
   });
 
-  return assignTiers(base);
+  const periUrban = taluksCollection.features.map((f) => {
+    const name =
+      typeof f.properties?.name === 'string' ? f.properties.name : '';
+    const population = popByZone.get(name) ?? 0;
+    const areaSqKm = featureAreaSqKm(f as Feature<Geometry>);
+    const density = areaSqKm > 0 ? population / areaSqKm : 0;
+    return featureToDensity(
+      f as Feature<Geometry>,
+      `taluk-${name}`,
+      population,
+      areaSqKm,
+      density,
+    );
+  });
+
+  return assignTiers([...periUrban, ...wards]);
 }
 
 export function densityFillColor(tier: DensityTier | null): string {

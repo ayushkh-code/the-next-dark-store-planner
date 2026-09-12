@@ -993,6 +993,10 @@ h4,
   margin-bottom: 0.35rem;
 }
 
+.coverage-map__lakes {
+  pointer-events: none;
+}
+
 .coverage-map__dot {
   cursor: pointer;
   transition: fill-opacity 0.15s ease;

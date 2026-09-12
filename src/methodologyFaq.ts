@@ -60,7 +60,7 @@ export const METHODOLOGY_FAQ: MethodologyFaqItem[] = [
     paragraphs: [
       'Add one or more current node PINs. Each demand pincode is assigned to the nearest node by service hours. A pincode counts as served if any node can reach it within the selected service standard (1, 2, or 3 hours).',
       'Demand served % is the sum of demand index for served PINs divided by total metro demand index; population % uses the same union logic. The expansion planner ranks alternative next sites by incremental demand, population, or pincode count. The UI shows the top pick, with more independent alternatives on request. Excluding a site removes it from the candidate set.',
-      'The coverage map plots each pincode centroid on a Mercator Bengaluru frame; dot size reflects population and colour reflects an amber service-hour ramp. Green markers with a pulse show recommended next sites.',
+      'The coverage map plots each pincode centroid on a Mercator Bengaluru frame built from BBMP ward polygons (the same 198-ward 2011 geography used for population), peri-urban taluk outlines, and major lakes. Dot size reflects population and colour reflects an amber service-hour ramp. Green markers with a pulse show recommended next sites.',
     ],
   },
   {
@@ -68,7 +68,7 @@ export const METHODOLOGY_FAQ: MethodologyFaqItem[] = [
     paragraphs: [
       'This tool is for exploratory dark-store and micro-fulfillment siting, not carrier quoting or financial forecasting. Distances use straight-line approximations, not actual road networks or live traffic. Hour buckets are modeled heuristics, not promised SLA.',
       'Demand index, service hours, and income are estimates from public geography plus a documented model, not measured demand or quoted rates.',
-      'Population is apportioned from 2011 BBMP wards with a growth factor, not a 2024 census of each PIN. Zone polygons on the density map are convex hulls of pincode points, not official BBMP boundary files.',
+      'Population is apportioned from 2011 BBMP wards with a growth factor, not a 2024 census of each PIN. Ward outlines on the maps are simplified from the official BBMP 2011 ward file. Peri-urban taluk outlines and named lakes (Bellandur, Varthur, Halasuru, Hebbal, Sankey, Agara, Madiwala) are from OpenStreetMap and are clipped to the metro frame.',
     ],
   },
 ];

@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "data": "node scripts/build_pincode_data.mjs",
+    "data": "node scripts/build_pincode_data.mjs && node scripts/build_map_geography.mjs",
+    "map": "node scripts/build_map_geography.mjs",
     "test": "vitest run"
   },
   "dependencies": {

@@ -7,10 +7,12 @@ import type { PinZone } from './data';
 import {
   MAP_HEIGHT,
   MAP_WIDTH,
+  lakePaths,
   projectPoint,
   rewindFeatureForD3,
-  zonePaths,
-  zonesCollection,
+  talukPaths,
+  wardPaths,
+  wardsCollection,
 } from './map';
 import { computeZoneDensities } from './zoneDensity';
 
@@ -62,30 +64,35 @@ describe('Bengaluru map projection', () => {
     }
   });
 
-  it('rewinds zone hulls so d3-geo sees Bengaluru, not the globe', () => {
+  it('rewinds ward polygons so d3-geo sees Bengaluru, not the globe', () => {
     const world = 4 * Math.PI;
-    for (const feature of zonesCollection.features) {
+    expect(wardsCollection.features.length).toBeGreaterThan(150);
+    for (const feature of wardsCollection.features) {
       const area = geoArea(rewindFeatureForD3(feature));
       expect(area).toBeGreaterThan(0);
       expect(area).toBeLessThan(world * 0.001);
     }
   });
 
-  it('draws zone outlines as local paths, not a full-frame fill', () => {
-    expect(zonePaths.length).toBeGreaterThan(5);
-    for (const zone of zonePaths) {
+  it('draws a dense ward fabric plus taluks and lakes', () => {
+    expect(wardPaths.length).toBeGreaterThan(150);
+    expect(talukPaths.length).toBe(4);
+    expect(lakePaths.length).toBeGreaterThan(4);
+    for (const zone of [...wardPaths, ...talukPaths, ...lakePaths]) {
       expect(zone.d).toBeTruthy();
       expect(zone.d!.length).toBeGreaterThan(20);
-      expect(zone.d!.length).toBeLessThan(2000);
+      expect(zone.d!.length).toBeLessThan(30_000);
     }
   });
 
-  it('gives density hulls a metro-scale area', () => {
+  it('gives density polygons a metro-scale area', () => {
     const densities = computeZoneDensities(zones);
-    expect(densities.length).toBeGreaterThan(5);
-    for (const zone of densities) {
-      expect(zone.areaSqKm).toBeGreaterThan(1);
-      expect(zone.areaSqKm).toBeLessThan(2_000);
+    expect(densities.length).toBeGreaterThan(150);
+    const wardAreas = densities.filter((z) => z.id.startsWith('ward-'));
+    expect(wardAreas.length).toBeGreaterThan(150);
+    for (const zone of wardAreas) {
+      expect(zone.areaSqKm).toBeGreaterThan(0.2);
+      expect(zone.areaSqKm).toBeLessThan(80);
       expect(zone.path).toBeTruthy();
     }
   });

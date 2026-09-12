@@ -9,7 +9,7 @@ import type {
   MultiPoint,
   Position,
 } from 'geojson';
-import zonesGeo from './blr-zones.json';
+import basemap from './blr-basemap.json';
 
 /** Amber sequential ramp: 1-hour (closest) = most saturated. */
 export const HOUR_COLORS: Record<number, string> = {
@@ -24,7 +24,33 @@ const ORIGIN_COLOR = '#F59E0B';
 export const MAP_WIDTH = 975;
 export const MAP_HEIGHT = 720;
 
-export const zonesCollection = zonesGeo as FeatureCollection<Geometry>;
+export interface BasemapProperties {
+  kind?: 'ward' | 'taluk';
+  name?: string;
+  abbr?: string;
+  zone?: string;
+  lat?: number;
+  lng?: number;
+  population?: number;
+  areaSqKm?: number;
+  density?: number;
+}
+
+type BasemapFeature = Feature<Geometry, BasemapProperties>;
+
+interface BasemapFile {
+  wards: FeatureCollection<Geometry, BasemapProperties>;
+  taluks: FeatureCollection<Geometry, BasemapProperties>;
+  lakes: FeatureCollection<Geometry, BasemapProperties>;
+}
+
+const { wards, taluks, lakes } = basemap as BasemapFile;
+
+export const wardsCollection = wards;
+export const taluksCollection = taluks;
+export const lakesCollection = lakes;
+/** @deprecated Prefer wardsCollection; kept for older density hull callers. */
+export const zonesCollection = wards;
 
 export interface ZoneMapLabel {
   name: string;
@@ -46,16 +72,21 @@ function ringArea(ring: Position[]): number {
 
 /**
  * d3-geo treats a counter-clockwise ring as the complement of the globe
- * (~4π steradians). Clockwise exteriors keep Bengaluru hulls as small polygons.
+ * (~4π steradians). Clockwise exteriors keep Bengaluru polygons local.
  */
-function ensureClockwiseRing(ring: Position[]): Position[] {
+function ensureClockwiseRing(ring: Position[], clockwise: boolean): Position[] {
   const closed =
     ring.length > 1 &&
     ring[0][0] === ring[ring.length - 1][0] &&
     ring[0][1] === ring[ring.length - 1][1];
   const open = closed ? ring.slice(0, -1) : ring.slice();
-  const ordered = ringArea(open.concat([open[0]])) > 0 ? open.reverse() : open;
+  const isClockwise = ringArea(open.concat([open[0]])) < 0;
+  const ordered = clockwise === isClockwise ? open : open.reverse();
   return [...ordered, ordered[0]];
+}
+
+function rewindPolygonRings(rings: Position[][]): Position[][] {
+  return rings.map((ring, i) => ensureClockwiseRing(ring, i === 0));
 }
 
 /** Rewind polygons so d3-geo area, bounds, and path fills stay local. */
@@ -63,48 +94,101 @@ export function rewindFeatureForD3(
   feature: Feature<Geometry>,
 ): Feature<Geometry> {
   const g = feature.geometry;
-  if (!g || g.type !== 'Polygon') return feature;
-  return {
-    ...feature,
-    geometry: {
-      type: 'Polygon',
-      coordinates: g.coordinates.map((ring) => ensureClockwiseRing(ring)),
-    },
-  };
+  if (!g) return feature;
+  if (g.type === 'Polygon') {
+    return {
+      ...feature,
+      geometry: {
+        type: 'Polygon',
+        coordinates: rewindPolygonRings(g.coordinates),
+      },
+    };
+  }
+  if (g.type === 'MultiPolygon') {
+    return {
+      ...feature,
+      geometry: {
+        type: 'MultiPolygon',
+        coordinates: g.coordinates.map((poly) => rewindPolygonRings(poly)),
+      },
+    };
+  }
+  return feature;
 }
 
-const rewoundZones: FeatureCollection<Geometry> = {
+function collectPositions(geometry: Geometry | null): Position[] {
+  if (!geometry) return [];
+  if (geometry.type === 'Polygon') return geometry.coordinates.flat();
+  if (geometry.type === 'MultiPolygon') return geometry.coordinates.flat(2);
+  if (geometry.type === 'Point') return [geometry.coordinates];
+  if (geometry.type === 'MultiPoint') return geometry.coordinates;
+  return [];
+}
+
+const rewoundWards: FeatureCollection<Geometry, BasemapProperties> = {
   type: 'FeatureCollection',
-  features: zonesCollection.features.map((f) =>
-    rewindFeatureForD3(f as Feature<Geometry>),
+  features: wards.features.map(
+    (f) => rewindFeatureForD3(f) as BasemapFeature,
   ),
 };
 
+const rewoundTaluks: FeatureCollection<Geometry, BasemapProperties> = {
+  type: 'FeatureCollection',
+  features: taluks.features.map(
+    (f) => rewindFeatureForD3(f) as BasemapFeature,
+  ),
+};
+
+const rewoundLakes: FeatureCollection<Geometry, BasemapProperties> = {
+  type: 'FeatureCollection',
+  features: lakes.features.map(
+    (f) => rewindFeatureForD3(f) as BasemapFeature,
+  ),
+};
+
+/** Peri-urban PIN centroids so the frame keeps Hoskote / Anekal / airport in view. */
+const METRO_FIT_POINTS: Position[] = [
+  [77.3936, 13.0989],
+  [77.7132, 13.2481],
+  [77.7981, 13.0706],
+  [77.6959, 12.7108],
+  [77.7701, 12.7852],
+  [77.7862, 12.86],
+];
+
 const fitPoints: MultiPoint = {
   type: 'MultiPoint',
-  coordinates: rewoundZones.features.flatMap((f) => {
-    const g = f.geometry;
-    if (g?.type === 'Polygon') return g.coordinates[0] ?? [];
-    return [];
-  }),
+  coordinates: [
+    ...rewoundWards.features.flatMap((f) => collectPositions(f.geometry)),
+    ...METRO_FIT_POINTS,
+  ],
 };
 
 const projection = geoMercator().fitExtent(
   [
-    [36, 24],
-    [MAP_WIDTH - 36, MAP_HEIGHT - 24],
+    [28, 18],
+    [MAP_WIDTH - 28, MAP_HEIGHT - 18],
   ],
   fitPoints,
 );
 
 const pathGenerator = geoPath(projection);
 
-/** SVG path for a zone feature in the shared Mercator projection. */
+function featurePaths(
+  collection: FeatureCollection<Geometry, BasemapProperties>,
+): { id: string; d: string | null }[] {
+  return collection.features.map((f) => ({
+    id: String(f.id ?? f.properties?.name ?? ''),
+    d: pathGenerator(f) ?? null,
+  }));
+}
+
+/** SVG path for a polygon feature in the shared Mercator projection. */
 export function zoneSvgPath(feature: Feature<Geometry>): string | null {
   return pathGenerator(rewindFeatureForD3(feature)) ?? null;
 }
 
-/** Projected centroid for zone labels. */
+/** Projected centroid for zone / ward labels. */
 export function zoneLabelPoint(
   feature: Feature<Geometry>,
 ): [number, number] | null {
@@ -124,24 +208,67 @@ export function zoneLabelPoint(
   return c;
 }
 
-/** SVG path data for Bengaluru zone outlines. */
-export const zonePaths: { id: string; d: string | null }[] =
-  rewoundZones.features.map((f) => ({
-    id: String(f.properties?.name ?? f.id ?? ''),
-    d: pathGenerator(f) ?? null,
-  }));
+export const wardPaths = featurePaths(rewoundWards);
+export const talukPaths = featurePaths(rewoundTaluks);
+export const lakePaths = featurePaths(rewoundLakes);
+/** Coverage / density choropleth units: BBMP wards. */
+export const zonePaths = wardPaths;
+
+const ZONE_LABEL_NUDGE: Record<string, [number, number]> = {
+  East: [8, -4],
+  West: [-10, 4],
+  South: [0, 10],
+  'RR Nagar': [-6, 8],
+  Bommanahalli: [8, 6],
+  Mahadevapura: [12, 0],
+  Yelahanka: [0, -6],
+  Dasarahalli: [-8, -4],
+};
 
 /** Projected label positions for metro zones / taluks. */
 export function getZoneMapLabels(): ZoneMapLabel[] {
-  return rewoundZones.features
-    .map((f) => {
-      const name =
-        typeof f.properties?.name === 'string' ? f.properties.name : '';
-      const abbr =
-        typeof f.properties?.abbr === 'string' ? f.properties.abbr : name;
-      const centroid = zoneLabelPoint(f as Feature<Geometry>);
-      if (!name || !centroid) return null;
-      return { name, abbr, x: centroid[0], y: centroid[1] };
+  const buckets = new Map<
+    string,
+    { abbr: string; lat: number; lng: number; n: number }
+  >();
+
+  const add = (name: string, abbr: string, lat: number, lng: number) => {
+    const cur = buckets.get(name);
+    if (!cur) {
+      buckets.set(name, { abbr, lat, lng, n: 1 });
+      return;
+    }
+    cur.lat += lat;
+    cur.lng += lng;
+    cur.n += 1;
+  };
+
+  for (const f of rewoundWards.features) {
+    const name = f.properties?.zone;
+    const lat = f.properties?.lat;
+    const lng = f.properties?.lng;
+    if (!name || lat == null || lng == null) continue;
+    add(name, name, lat, lng);
+  }
+  for (const f of rewoundTaluks.features) {
+    const name = f.properties?.name;
+    const lat = f.properties?.lat;
+    const lng = f.properties?.lng;
+    if (!name || lat == null || lng == null) continue;
+    add(name, f.properties?.abbr ?? name, lat, lng);
+  }
+
+  return [...buckets.entries()]
+    .map(([name, b]) => {
+      const centroid = projectPoint(b.lat / b.n, b.lng / b.n);
+      if (!centroid) return null;
+      const nudge = ZONE_LABEL_NUDGE[name] ?? [0, 0];
+      return {
+        name,
+        abbr: b.abbr,
+        x: centroid[0] + nudge[0],
+        y: centroid[1] + nudge[1],
+      };
     })
     .filter((l): l is ZoneMapLabel => l !== null);
 }

@@ -10,8 +10,10 @@ import {
   MAP_WIDTH,
   dotRadius,
   getZoneMapLabels,
+  lakePaths,
   projectPoint,
-  zonePaths,
+  talukPaths,
+  wardPaths,
   zoneFillColor,
   zoneOpacity,
 } from '../map';
@@ -143,15 +145,43 @@ export function NetworkCoverageMap({
 
           <rect width={MAP_WIDTH} height={MAP_HEIGHT} fill="#F8F7F5" rx={4} />
 
-          <g className="coverage-map__states">
-            {zonePaths.map((s) =>
+          <g className="coverage-map__taluks">
+            {talukPaths.map((s) =>
               s.d ? (
                 <path
-                  key={s.id}
+                  key={`taluk-${s.id}`}
+                  d={s.d}
+                  fill="#F3F1EC"
+                  stroke="#E5E1DA"
+                  strokeWidth={0.7}
+                />
+              ) : null,
+            )}
+          </g>
+
+          <g className="coverage-map__states">
+            {wardPaths.map((s) =>
+              s.d ? (
+                <path
+                  key={`ward-${s.id}`}
                   d={s.d}
                   fill="#EFEDE8"
-                  stroke="#E3E0DB"
-                  strokeWidth={0.6}
+                  stroke="#D9D4CC"
+                  strokeWidth={0.4}
+                />
+              ) : null,
+            )}
+          </g>
+
+          <g className="coverage-map__lakes">
+            {lakePaths.map((s) =>
+              s.d ? (
+                <path
+                  key={`lake-${s.id}`}
+                  d={s.d}
+                  fill="#C5D4DE"
+                  stroke="#B3C5D1"
+                  strokeWidth={0.4}
                 />
               ) : null,
             )}

@@ -60,7 +60,7 @@ export const METHODOLOGY_FAQ: MethodologyFaqItem[] = [
     paragraphs: [
       'Add one or more current node PINs. Each demand pincode is assigned to the nearest node by service hours. A pincode counts as served if any node can reach it within the selected service standard (1, 2, or 3 hours).',
       'Demand served % is the sum of demand index for served PINs divided by total metro demand index; population % uses the same union logic. The expansion planner ranks alternative next sites by incremental demand, population, or pincode count. The UI shows the top pick, with more independent alternatives on request. Excluding a site removes it from the candidate set.',
-      'The coverage map shades BBMP wards and peri-urban taluks by last-mile service hours from the nearest node (1h rust, 2h orange, 3h peach). Hours beyond the selected threshold stay beige. Navy markers are existing nodes; green markers with a pulse are recommended next sites.',
+      'The coverage map shades BBMP wards by last-mile service hours from the nearest node (1h rust, 2h orange, 3h peach). Hours beyond the selected threshold stay beige. Peri-urban PINs outside the BBMP ward fabric are shown as dots so a whole taluk is not painted from a single PIN. Navy markers are existing nodes; green markers with a pulse are recommended next sites.',
     ],
   },
   {

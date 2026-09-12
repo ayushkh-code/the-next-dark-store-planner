@@ -190,6 +190,35 @@ export function NetworkCoverageMap({
             )}
           </g>
 
+          {regions.orphans.map((pin) =>
+            pin.isOrigin ? null : (
+              <circle
+                key={`orphan-${pin.pincode}`}
+                cx={pin.x}
+                cy={pin.y}
+                r={4.5}
+                fill={pin.fill}
+                stroke={pin.within ? '#0F2438' : 'none'}
+                strokeWidth={pin.within ? 0.6 : 0}
+                className="coverage-map__region-dot"
+                onMouseEnter={() =>
+                  setHovered({
+                    name: pin.locality,
+                    pincode: pin.pincode,
+                    locality: pin.locality,
+                    service_hours: pin.hours,
+                    node: pin.node,
+                    population: pin.population,
+                    within: pin.within,
+                    x: pin.x,
+                    y: pin.y,
+                  })
+                }
+                onMouseLeave={() => setHovered(null)}
+              />
+            ),
+          )}
+
           {nodeMarkers.map(({ zone, x, y }) => (
             <g
               key={`node-${zone.pincode}`}

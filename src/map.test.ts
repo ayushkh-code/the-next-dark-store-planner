@@ -114,7 +114,8 @@ describe('Bengaluru map projection', () => {
     expect(one.wards.length).toBeGreaterThan(150);
     expect(fillsAt(one, 1)).toBeGreaterThan(5);
     expect(fillsAt(one, 2)).toBe(0);
+    expect(one.taluks.every((t) => t.fill === OUT_OF_RANGE_COLOR)).toBe(true);
     expect(fillsAt(three, 1)).toBe(fillsAt(one, 1));
-    expect(fillsAt(three, 2) + fillsAt(three, 3)).toBeGreaterThan(fillsAt(one, 1));
+    expect(fillsAt(three, 2) + fillsAt(three, 3)).toBeGreaterThan(5);
   });
 });

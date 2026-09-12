@@ -8,6 +8,7 @@ import type { ServedZone } from './networkCoverage';
 import {
   HOUR_COLORS,
   OUT_OF_RANGE_COLOR,
+  projectPoint,
   rewindFeatureForD3,
   taluksCollection,
   wardsCollection,
@@ -29,6 +30,19 @@ export interface RegionCoverage {
   locality: string;
   node: string;
   population: number | null;
+  fill: string;
+}
+
+export interface OrphanPin {
+  pincode: string;
+  locality: string;
+  hours: number;
+  within: boolean;
+  isOrigin: boolean;
+  node: string;
+  population: number | null;
+  x: number;
+  y: number;
   fill: string;
 }
 
@@ -128,17 +142,40 @@ function emptyRegion(
   };
 }
 
-/** Choropleth records for wards and taluks from PIN-level network coverage. */
+/** Choropleth records for wards; peri-urban PINs stay as dots, not whole-taluk fills. */
 export function computeRegionCoverage(
   servedZones: ServedZone[],
   nodePins: Set<string>,
   hourThreshold: 1 | 2 | 3,
-): { taluks: RegionCoverage[]; wards: RegionCoverage[] } {
+): {
+  taluks: RegionCoverage[];
+  wards: RegionCoverage[];
+  orphans: OrphanPin[];
+} {
   const bestByRegion = new Map<string, { region: IndexedRegion; row: ServedZone }>();
+  const orphans: OrphanPin[] = [];
 
   for (const row of servedZones) {
     const region = regionForPin(row);
-    if (!region) continue;
+    if (!region || region.kind === 'taluk') {
+      const coords = projectPoint(row.zone.centroid_lat, row.zone.centroid_lng);
+      if (!coords) continue;
+      const hours = row.min_service_hours;
+      const within = hours <= hourThreshold;
+      orphans.push({
+        pincode: row.zone.pincode,
+        locality: row.zone.locality,
+        hours,
+        within,
+        isOrigin: nodePins.has(row.zone.pincode),
+        node: row.nearest_node_pincode,
+        population: row.zone.population,
+        x: coords[0],
+        y: coords[1],
+        fill: shadeFill(hours, within),
+      });
+      continue;
+    }
     const id = featureId(region.feature, region.kind);
     const prev = bestByRegion.get(id);
     if (!prev || row.min_service_hours < prev.row.min_service_hours) {
@@ -185,5 +222,6 @@ export function computeRegionCoverage(
     wards: indexedWards
       .map(toCoverage)
       .filter((r): r is RegionCoverage => r !== null),
+    orphans,
   };
 }

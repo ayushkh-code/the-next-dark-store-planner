@@ -11,15 +11,18 @@ import type {
 } from 'geojson';
 import basemap from './blr-basemap.json';
 
-/** Amber sequential ramp: 1-hour (closest) = most saturated. */
+/**
+ * Service-hour fills: rust / vivid orange / peach so 1h, 2h, and 3h
+ * stay in the amber family but do not collapse into one wash.
+ */
 export const HOUR_COLORS: Record<number, string> = {
-  1: '#F59E0B',
-  2: '#FBBF24',
-  3: '#FDE68A',
+  1: '#9A3412',
+  2: '#EA580C',
+  3: '#FDBA74',
 };
 
-const OUT_OF_RANGE_COLOR = '#E3E0DB';
-const ORIGIN_COLOR = '#F59E0B';
+export const OUT_OF_RANGE_COLOR = '#E7E5E4';
+export const NODE_MARKER_COLOR = '#0F2438';
 
 export const MAP_WIDTH = 975;
 export const MAP_HEIGHT = 720;
@@ -293,12 +296,11 @@ export function dotRadius(population: number | null, isOrigin: boolean): number 
 export function zoneFillColor(
   serviceHours: number,
   withinThreshold: boolean,
-  isOrigin: boolean,
+  _isOrigin = false,
 ): string {
-  if (isOrigin) return ORIGIN_COLOR;
   if (!withinThreshold) return OUT_OF_RANGE_COLOR;
   if (serviceHours <= 3) return HOUR_COLORS[serviceHours] ?? OUT_OF_RANGE_COLOR;
-  return '#94a3b8';
+  return OUT_OF_RANGE_COLOR;
 }
 
 export function zoneOpacity(

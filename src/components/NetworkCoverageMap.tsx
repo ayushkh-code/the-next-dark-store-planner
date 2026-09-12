@@ -4,18 +4,15 @@ import type { ServedZone } from '../networkCoverage';
 import { formatNumber } from '../format';
 import { EMPTY_NODE_PROMPT } from '../labels';
 import { TransitDayText } from './TransitDaysHint';
+import { computeRegionCoverage } from '../regionCoverage';
 import {
   HOUR_COLORS,
   MAP_HEIGHT,
   MAP_WIDTH,
-  dotRadius,
+  NODE_MARKER_COLOR,
   getZoneMapLabels,
   lakePaths,
   projectPoint,
-  talukPaths,
-  wardPaths,
-  zoneFillColor,
-  zoneOpacity,
 } from '../map';
 
 const zoneLabels = getZoneMapLabels();
@@ -29,12 +26,14 @@ interface NetworkCoverageMapProps {
   compact?: boolean;
 }
 
-interface HoveredZone {
+interface HoveredRegion {
+  name: string;
   pincode: string;
-  label: string;
+  locality: string;
   service_hours: number;
   node: string;
   population: number | null;
+  within: boolean;
   x: number;
   y: number;
 }
@@ -46,36 +45,26 @@ export function NetworkCoverageMap({
   hourThreshold,
   compact = false,
 }: NetworkCoverageMapProps) {
-  const [hovered, setHovered] = useState<HoveredZone | null>(null);
+  const [hovered, setHovered] = useState<HoveredRegion | null>(null);
   const nodePins = useMemo(
     () => new Set(nodes.map((w) => w.pincode)),
     [nodes],
   );
 
-  const plotted = useMemo(() => {
-    return servedZones
-      .map((row) => {
-        const coords = projectPoint(
-          row.zone.centroid_lat,
-          row.zone.centroid_lng,
-        );
+  const regions = useMemo(
+    () => computeRegionCoverage(servedZones, nodePins, hourThreshold),
+    [servedZones, nodePins, hourThreshold],
+  );
+
+  const nodeMarkers = useMemo(() => {
+    return nodes
+      .map((zone) => {
+        const coords = projectPoint(zone.centroid_lat, zone.centroid_lng);
         if (!coords) return null;
-        const isNode = nodePins.has(row.zone.pincode);
-        const within = row.min_service_hours <= hourThreshold;
-        return {
-          row,
-          x: coords[0],
-          y: coords[1],
-          isNode,
-          within,
-          r: dotRadius(row.zone.population, isNode),
-          fill: zoneFillColor(row.min_service_hours, within, isNode),
-          opacity: zoneOpacity(row.min_service_hours, hourThreshold, isNode),
-        };
+        return { zone, x: coords[0], y: coords[1] };
       })
-      .filter((p): p is NonNullable<typeof p> => p !== null)
-      .sort((a, b) => a.r - b.r);
-  }, [servedZones, nodePins, hourThreshold]);
+      .filter((m): m is NonNullable<typeof m> => m !== null);
+  }, [nodes]);
 
   const recommendedMarkers = useMemo(() => {
     return recommendedNodes
@@ -127,47 +116,61 @@ export function NetworkCoverageMap({
               : 'Bengaluru map showing multi-node network coverage'
           }
         >
-          <defs>
-            <filter
-              id="coverage-glow"
-              x="-80%"
-              y="-80%"
-              width="260%"
-              height="260%"
-            >
-              <feGaussianBlur stdDeviation="2.2" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-          </defs>
-
           <rect width={MAP_WIDTH} height={MAP_HEIGHT} fill="#F8F7F5" rx={4} />
 
           <g className="coverage-map__taluks">
-            {talukPaths.map((s) =>
-              s.d ? (
+            {regions.taluks.map((region) =>
+              region.path ? (
                 <path
-                  key={`taluk-${s.id}`}
-                  d={s.d}
-                  fill="#F3F1EC"
-                  stroke="#E5E1DA"
-                  strokeWidth={0.7}
+                  key={region.id}
+                  d={region.path}
+                  fill={region.fill}
+                  stroke={region.isOrigin ? NODE_MARKER_COLOR : '#F8F7F5'}
+                  strokeWidth={region.isOrigin ? 1.4 : 0.55}
+                  className="coverage-map__region"
+                  onMouseEnter={() =>
+                    setHovered({
+                      name: region.name,
+                      pincode: region.pincode,
+                      locality: region.locality,
+                      service_hours: region.hours,
+                      node: region.node,
+                      population: region.population,
+                      within: region.within,
+                      x: region.x,
+                      y: region.y,
+                    })
+                  }
+                  onMouseLeave={() => setHovered(null)}
                 />
               ) : null,
             )}
           </g>
 
           <g className="coverage-map__states">
-            {wardPaths.map((s) =>
-              s.d ? (
+            {regions.wards.map((region) =>
+              region.path ? (
                 <path
-                  key={`ward-${s.id}`}
-                  d={s.d}
-                  fill="#EFEDE8"
-                  stroke="#D9D4CC"
-                  strokeWidth={0.4}
+                  key={region.id}
+                  d={region.path}
+                  fill={region.fill}
+                  stroke={region.isOrigin ? NODE_MARKER_COLOR : '#F8F7F5'}
+                  strokeWidth={region.isOrigin ? 1.4 : 0.45}
+                  className="coverage-map__region"
+                  onMouseEnter={() =>
+                    setHovered({
+                      name: region.name,
+                      pincode: region.pincode,
+                      locality: region.locality,
+                      service_hours: region.hours,
+                      node: region.node,
+                      population: region.population,
+                      within: region.within,
+                      x: region.x,
+                      y: region.y,
+                    })
+                  }
+                  onMouseLeave={() => setHovered(null)}
                 />
               ) : null,
             )}
@@ -187,31 +190,20 @@ export function NetworkCoverageMap({
             )}
           </g>
 
-          {plotted.map(({ row, x, y, r, fill, opacity, isNode, within }) => (
-            <circle
-              key={row.zone.pincode}
-              cx={x}
-              cy={y}
-              r={r}
-              fill={fill}
-              fillOpacity={opacity}
-              stroke={isNode ? '#0F2438' : 'none'}
-              strokeWidth={isNode ? 2 : 0}
-              filter={within && !isNode ? 'url(#coverage-glow)' : undefined}
-              className={`coverage-map__dot${within ? ' coverage-map__dot--within' : ''}`}
-              onMouseEnter={() =>
-                setHovered({
-                  pincode: row.zone.pincode,
-                  label: `${row.zone.locality}, ${row.zone.zone_or_taluk}`,
-                  service_hours: row.min_service_hours,
-                  node: row.nearest_node_pincode,
-                  population: row.zone.population,
-                  x,
-                  y,
-                })
-              }
-              onMouseLeave={() => setHovered(null)}
-            />
+          {nodeMarkers.map(({ zone, x, y }) => (
+            <g
+              key={`node-${zone.pincode}`}
+              className="coverage-map__node"
+              transform={`translate(${x}, ${y})`}
+              aria-label={`Existing node ${zone.pincode}`}
+            >
+              <circle
+                r={6.5}
+                fill={NODE_MARKER_COLOR}
+                stroke="#fff"
+                strokeWidth={1.75}
+              />
+            </g>
           ))}
 
           {recommendedMarkers.map(({ zone, rank, x, y }) => (
@@ -271,11 +263,19 @@ export function NetworkCoverageMap({
               top: `${(hovered.y / MAP_HEIGHT) * 100}%`,
             }}
           >
-            <strong className="mono">{hovered.pincode}</strong>
-            <span>{hovered.label}</span>
+            <strong>{hovered.name}</strong>
+            {hovered.pincode ? (
+              <span>
+                {hovered.locality} ·{' '}
+                <span className="mono">{hovered.pincode}</span>
+              </span>
+            ) : null}
             <span className="mono">
-              {hovered.service_hours} hour{hovered.service_hours > 1 ? 's' : ''}{' '}
-              from {hovered.node}
+              {Number.isFinite(hovered.service_hours)
+                ? `${hovered.service_hours} hour${hovered.service_hours > 1 ? 's' : ''}${
+                    hovered.within ? '' : ' (beyond threshold)'
+                  } from ${hovered.node}`
+                : 'No coverage yet'}
             </span>
             <span className="mono">Pop. {formatNumber(hovered.population)}</span>
           </div>
@@ -286,27 +286,27 @@ export function NetworkCoverageMap({
         <ul className="coverage-map__legend" aria-label="Map legend">
           <li>
             <span
-              className="coverage-map__swatch"
+              className="coverage-map__swatch coverage-map__swatch--fill"
               style={{ background: HOUR_COLORS[1] }}
             />
             <TransitDayText hours={1} hint />
           </li>
           <li>
             <span
-              className="coverage-map__swatch"
+              className="coverage-map__swatch coverage-map__swatch--fill"
               style={{ background: HOUR_COLORS[2] }}
             />
             <TransitDayText hours={2} hint />
           </li>
           <li>
             <span
-              className="coverage-map__swatch"
+              className="coverage-map__swatch coverage-map__swatch--fill"
               style={{ background: HOUR_COLORS[3] }}
             />
             <TransitDayText hours={3} hint />
           </li>
           <li>
-            <span className="coverage-map__swatch coverage-map__swatch--muted" />
+            <span className="coverage-map__swatch coverage-map__swatch--fill coverage-map__swatch--muted" />
             Not served
           </li>
           <li>

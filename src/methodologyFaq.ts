@@ -60,7 +60,7 @@ export const METHODOLOGY_FAQ: MethodologyFaqItem[] = [
     paragraphs: [
       'Add one or more current node PINs. Each demand pincode is assigned to the nearest node by service hours. A pincode counts as served if any node can reach it within the selected service standard (1, 2, or 3 hours).',
       'Demand served % is the sum of demand index for served PINs divided by total metro demand index; population % uses the same union logic. The expansion planner ranks alternative next sites by incremental demand, population, or pincode count. The UI shows the top pick, with more independent alternatives on request. Excluding a site removes it from the candidate set.',
-      'The coverage map plots each pincode centroid on a Mercator Bengaluru frame built from BBMP ward polygons (the same 198-ward 2011 geography used for population), peri-urban taluk outlines, and major lakes. Dot size reflects population and colour reflects an amber service-hour ramp. Green markers with a pulse show recommended next sites.',
+      'The coverage map shades BBMP wards and peri-urban taluks by last-mile service hours from the nearest node (1h rust, 2h orange, 3h peach). Hours beyond the selected threshold stay beige. Navy markers are existing nodes; green markers with a pulse are recommended next sites.',
     ],
   },
   {

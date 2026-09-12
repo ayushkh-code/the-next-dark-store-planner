@@ -15,6 +15,9 @@ import {
   wardsCollection,
 } from './map';
 import { computeZoneDensities } from './zoneDensity';
+import { computeNetworkCoverage } from './networkCoverage';
+import { computeRegionCoverage } from './regionCoverage';
+import { HOUR_COLORS, OUT_OF_RANGE_COLOR } from './map';
 
 function loadZones(): PinZone[] {
   const csvPath = path.resolve('public/blr_pincode_demand_reference.csv');
@@ -95,5 +98,23 @@ describe('Bengaluru map projection', () => {
       expect(zone.areaSqKm).toBeLessThan(80);
       expect(zone.path).toBeTruthy();
     }
+  });
+
+  it('uses distinct 1h / 2h / 3h fill colours', () => {
+    expect(new Set([HOUR_COLORS[1], HOUR_COLORS[2], HOUR_COLORS[3], OUT_OF_RANGE_COLOR]).size).toBe(4);
+  });
+
+  it('shades wards by service hours instead of collapsing all bands', () => {
+    const served = computeNetworkCoverage(sample, zones);
+    const one = computeRegionCoverage(served, new Set(samplePins), 1);
+    const three = computeRegionCoverage(served, new Set(samplePins), 3);
+    const fillsAt = (regions: typeof one, hour: 1 | 2 | 3) =>
+      [...regions.wards, ...regions.taluks].filter((r) => r.fill === HOUR_COLORS[hour]).length;
+
+    expect(one.wards.length).toBeGreaterThan(150);
+    expect(fillsAt(one, 1)).toBeGreaterThan(5);
+    expect(fillsAt(one, 2)).toBe(0);
+    expect(fillsAt(three, 1)).toBe(fillsAt(one, 1));
+    expect(fillsAt(three, 2) + fillsAt(three, 3)).toBeGreaterThan(fillsAt(one, 1));
   });
 });

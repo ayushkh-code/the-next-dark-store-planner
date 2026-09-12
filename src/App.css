@@ -997,9 +997,17 @@ h4,
   pointer-events: none;
 }
 
-.coverage-map__dot {
+.coverage-map__region {
   cursor: pointer;
-  transition: fill-opacity 0.15s ease;
+}
+
+.coverage-map__region:hover {
+  stroke: #0f2438;
+  stroke-width: 1.1px;
+}
+
+.coverage-map__swatch--fill {
+  border-radius: 2px;
 }
 
 .coverage-map__dot--within {
@@ -1013,7 +1021,7 @@ h4,
 }
 
 .coverage-map__swatch--muted {
-  background: #E3E0DB;
+  background: #E7E5E4;
 }
 
 .coverage-map__swatch--origin {
@@ -1085,7 +1093,7 @@ h4,
 }
 
 .coverage-map__swatch--muted {
-  background: #E3E0DB;
+  background: #E7E5E4;
 }
 
 .coverage-map__swatch--origin {
